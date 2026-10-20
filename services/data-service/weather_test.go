@@ -728,3 +728,78 @@ func TestFailedWeatherRefreshBacksOffAndGatesNextTick(t *testing.T) {
 		}
 	})
 }
+
+type systemLocationWeatherProvider struct {
+	queries   *[]string
+	languages *[]string
+}
+
+func (provider systemLocationWeatherProvider) Forecast(context.Context, WeatherLocation, string) (WeatherForecast, error) {
+	return WeatherForecast{Current: &WeatherCurrent{Time: "now", Temperature: 9}}, nil
+}
+
+func (provider systemLocationWeatherProvider) Search(_ context.Context, query, language string, _ int) ([]WeatherLocation, error) {
+	*provider.queries = append(*provider.queries, query)
+	*provider.languages = append(*provider.languages, language)
+	return []WeatherLocation{
+		{ID: "open-meteo:4517586", Name: "Stockholm", Latitude: 40.1, Longitude: -84.2, Timezone: "America/New_York"},
+		{ID: "open-meteo:2673730", Name: "Stockholm", Latitude: 59.33, Longitude: 18.06, Timezone: "Europe/Stockholm"},
+	}, nil
+}
+
+func (provider systemLocationWeatherProvider) Summaries(context.Context, []WeatherLocation, string) (map[string]WeatherLocationSummary, error) {
+	return map[string]WeatherLocationSummary{}, nil
+}
+
+func refreshDefaultWeather(t *testing.T, provider WeatherProvider) WeatherState {
+	t.Helper()
+	var weather WeatherState
+	synctest.Test(t, func(t *testing.T) {
+		directory := t.TempDir()
+		service := &Service{
+			state:           State{Weather: defaultWeatherState()},
+			statePath:       filepath.Join(directory, "state.json"),
+			snapshotPath:    filepath.Join(directory, "snapshot.json"),
+			weatherProvider: provider,
+			last:            time.Now(),
+		}
+		if !service.startWeatherRefresh(true) {
+			t.Fatal("refresh was not accepted")
+		}
+		synctest.Wait()
+		weather = service.state.Weather
+	})
+	return weather
+}
+
+func TestDefaultWeatherLocationFollowsSystemTimezone(t *testing.T) {
+	t.Setenv("TZ", "Europe/Stockholm")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "sv_SE.UTF-8")
+	var queries, languages []string
+	weather := refreshDefaultWeather(t, systemLocationWeatherProvider{&queries, &languages})
+
+	if len(queries) != 1 || queries[0] != "Stockholm" || languages[0] != "sv" {
+		t.Fatalf("search queries = %v, languages = %v", queries, languages)
+	}
+	if weather.Location.ID != "open-meteo:2673730" {
+		t.Fatalf("location = %#v, want the Stockholm in Europe/Stockholm", weather.Location)
+	}
+	if len(weather.Locations) != 1 || weather.Locations[0].ID != weather.Location.ID {
+		t.Fatalf("legacy default still saved: %#v", weather.Locations)
+	}
+	if weather.Current == nil {
+		t.Fatalf("forecast was not fetched for the resolved location: %#v", weather)
+	}
+}
+
+func TestDefaultWeatherLocationStaysInLegacyTimezone(t *testing.T) {
+	t.Setenv("TZ", "Asia/Shanghai")
+	var queries, languages []string
+	weather := refreshDefaultWeather(t, systemLocationWeatherProvider{&queries, &languages})
+
+	if len(queries) != 0 || weather.Location.ID != legacyWeatherLocationID {
+		t.Fatalf("legacy timezone replaced the default: queries=%v location=%#v", queries, weather.Location)
+	}
+}
