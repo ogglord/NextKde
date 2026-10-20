@@ -16,7 +16,8 @@ stdenv.mkDerivation {
     # The standalone AI library lives at `services/ai/` in the source
     # tree, while this derivation builds the platform subdirectory alone.
     postPatch = ''
-      cp -r ${src}/services/ai services/ai
+      mkdir -p services
+      cp -r --no-preserve=mode ${src}/services/ai services/ai
     '';
 
     nativeBuildInputs = [
