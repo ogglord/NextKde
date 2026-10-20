@@ -33,13 +33,13 @@ nextkde = {
 ```sh
 nix flake update nextkde
 sudo nixos-rebuild switch --flake .#your-host
-kosctl version
+cat /run/current-system/sw/share/kos/release.json
 systemctl --user status kos-shell-init kos-platform kos-data kos-shell
 ```
 
-包读取根 VERSION 并记录可得 revision；打包 `kosctl version` 查询
-`/run/current-system/sw/share/kos/release.json` 的实际核心部署记录，`KOS_RELEASE_RECORD` 可另选真实部署。
-不在只读 store 运行源码 `update`；开发输入可显式 `ref=main`，但不是稳定版。
+包读取根 VERSION 并把可得 revision 记录到核心部署记录
+`/run/current-system/sw/share/kos/release.json`。模块不安装 `kosctl` 或 `kos-ctl`。
+开发输入可显式 `ref=main`，但不是稳定版。
 
 ## 所有权与排查
 
@@ -50,7 +50,7 @@ systemctl --user status kos-shell-init kos-platform kos-data kos-shell
 journalctl --user -b -u kos-shell-init -u kos-platform -u kos-data -u kos-shell
 ```
 
-旧 `kos-ctl` 确实存在，但其 store 搜索/sync 不等于模块初始化；版本化升级优先使用当前系统 generation 及 unit，
+版本化升级优先使用当前系统 generation 及 unit，
 不从任意匹配 store 目录推断已部署版本。`tools/nix-start.sh` 是另一开发辅助，验收不混用手工与声明式 unit。
 Settings 包需包含 QML 和 ECM 构建依赖；缺模块是打包错误，不绕过初始化。
 

@@ -35,14 +35,13 @@ After changing the tag, update the lock and rebuild; replace `your-host` with yo
 ```sh
 nix flake update nextkde
 sudo nixos-rebuild switch --flake .#your-host
-kosctl version
+cat /run/current-system/sw/share/kos/release.json
 systemctl --user status kos-shell-init kos-platform kos-data kos-shell
 ```
 
-Packages read root VERSION and record the available source revision. The packaged `kosctl version`
-reads the installed core record under `/run/current-system/sw/share/kos/release.json`;
-`KOS_RELEASE_RECORD` explicitly selects a different deployment. Do not run source `update` inside
-read-only Nix store. Development inputs may explicitly use `ref=main`; they are not stable releases.
+Packages read root VERSION and record the available source revision in the installed core record
+`/run/current-system/sw/share/kos/release.json`. The module does not install `kosctl` or `kos-ctl`.
+Development inputs may explicitly use `ref=main`; they are not stable releases.
 
 ## Runtime ownership and troubleshooting
 
@@ -55,9 +54,8 @@ than repeatedly chmod or overwrite the store:
 journalctl --user -b -u kos-shell-init -u kos-platform -u kos-data -u kos-shell
 ```
 
-The legacy `kos-ctl` helper exists, but its store-discovery/sync behavior is separate from the
-module-managed initialization. Prefer the selected system generation and its units for versioned
-upgrades. Do not infer the deployed version from an arbitrary matching store directory.
+Prefer the selected system generation and its units for versioned upgrades. Do not infer the
+deployed version from an arbitrary matching store directory.
 `tools/nix-start.sh` is an alternative development helper; do not mix manual units with declarative
 units during acceptance. Settings packages must include their QML and ECM build dependency;
 missing modules are a packaging failure, not a reason to bypass initialization.

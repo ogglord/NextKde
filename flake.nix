@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs = {
-      url = "git+https://mirrors.nju.edu.cn/git/nixpkgs.git?ref=nixos-unstable&shallow=1";
+      url = "github:NixOS/nixpkgs/nixos-unstable";
     };
   };
 
@@ -32,9 +32,6 @@
         cfg = config.services.kos;
         kos = self.packages.${system}.kos-desktop.override { buildWeather = cfg.weather.enable; };
         qs_bin = "${pkgs.quickshell}/bin/quickshell";
-        
-        # NixOS control interface
-        kos-ctl = pkgs.callPackage ./packaging/nix/kos-ctl.nix {};
       in {
         options.services.kos = {
           enable = lib.mkEnableOption "KOS Desktop Shell";
@@ -44,7 +41,8 @@
         };
 
         config = lib.mkIf cfg.enable {
-          # System-wide packages: binaries + KWin plugins + kosctl + kos-ctl
+          # System-wide packages: binaries + KWin plugins. The kosctl/kos-ctl
+          # helpers are left out: the module owns install and units here.
           #
           # The window decoration is one of the plugins, not an option: the KOS
           # Bridge effect draws the window buttons only on windows wearing it,
@@ -55,8 +53,6 @@
           environment.systemPackages = [
             pkgs.quickshell
             kos
-            kos.passthru.kosctl
-            kos-ctl
             kos.passthru.kwin-dock-window-animation
             kos.passthru.kwin-stage-animation
             kos.passthru.kwin-context-menu-input
