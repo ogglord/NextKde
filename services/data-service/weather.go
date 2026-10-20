@@ -756,9 +756,16 @@ func (s *Service) startWeatherRefresh(force bool) bool {
 	// conditions exist: after a success it is +1h, after a failure it is the
 	// exponential backoff. A user-initiated refresh (force) bypasses it, and
 	// location/units changes reset it to 0.
-	if !force && weather.NextRefreshAt > now.UnixMilli() {
+	// The legacy default skips the gate once per process, so an install
+	// with a cached forecast adopts the system location on its first tick
+	// rather than an hour later.
+	resolveLegacy := weather.Location.ID == legacyWeatherLocationID && !s.weatherSystemLocationTried
+	if !force && !resolveLegacy && weather.NextRefreshAt > now.UnixMilli() {
 		s.mu.Unlock()
 		return false
+	}
+	if resolveLegacy {
+		s.weatherSystemLocationTried = true
 	}
 	s.weatherRequestSerial++
 	serial := s.weatherRequestSerial
