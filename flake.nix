@@ -94,12 +94,18 @@
               wantedBy = [ "plasma-workspace-wayland.target" ];
               after = [ "graphical-session.target" "plasma-kwin_wayland.service" ];
               partOf = [ "plasma-workspace-wayland.target" ];
+              # Apps launched from KOS (KIO::ApplicationLauncherJob) inherit
+              # this unit's environment, so it must keep the session PATH that
+              # Plasma imports into the user manager: per-user profiles
+              # (/etc/profiles/per-user/$USER/bin, ~/.nix-profile/bin) and
+              # /run/wrappers/bin live only there. NixOS writes a PATH from
+              # `path` into every unit, which would shadow it; drop that line.
+              environment.PATH = lib.mkForce null;
               serviceConfig = {
                 Type = "simple";
                 ExecStart = "${kos}/libexec/kos-platform daemon";
                 Environment = [
                   "KOS_PLATFORM_KWIN_SCRIPT=${kos}/share/kos/platform/kwin/window-bridge.js"
-                  "PATH=/run/current-system/sw/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin"
                 ];
                 Restart = "on-failure";
                 RestartSec = 2;
@@ -129,6 +135,9 @@
               after = [ "graphical-session.target" "plasma-kwin_wayland.service" "plasma-plasmashell.service"
                 "kos-platform.service" "kos-data.service" "kos-shell-init.service" ];
               partOf = [ "plasma-workspace-wayland.target" ];
+              # Session PATH, as for kos-platform: the shell also launches
+              # apps directly when the daemon is unavailable.
+              environment.PATH = lib.mkForce null;
               serviceConfig = {
                 Type = "simple";
                 KillMode = "process";
@@ -138,7 +147,6 @@
                   "MALLOC_ARENA_MAX=2"
                   "QML2_IMPORT_PATH=%h/.config/quickshell/kos:${kos.passthru.kos-spatial3d}/lib/qt6/qml:${pkgs.kdePackages.qtquick3d}/lib/qt-6/qml:${pkgs.kdePackages.qt5compat}/lib/qt-6/qml"
                   "QT_PLUGIN_PATH=${pkgs.kdePackages.qtsvg}/lib/qt-6/plugins:${pkgs.kdePackages.qtimageformats}/lib/qt-6/plugins"
-                  "PATH=/run/current-system/sw/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:${pkgs.findutils}/bin:${pkgs.gnugrep}/bin:${pkgs.gnused}/bin"
                 ];
                 Restart = "on-failure";
                 RestartSec = 2;
