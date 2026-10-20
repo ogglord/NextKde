@@ -28,7 +28,10 @@ type Service struct {
 	// weatherFailStreak counts consecutive forecast fetch failures and drives
 	// the exponential retry backoff. Guarded by s.mu.
 	weatherFailStreak int
-	last              time.Time
+	// weatherSystemLocationTried records that this process already tried to
+	// replace the legacy default location. Guarded by s.mu.
+	weatherSystemLocationTried bool
+	last                       time.Time
 	// prevCPUTotal/prevCPUIdle are only touched by readCPU, which runs only
 	// from sample() (the main goroutine's startup call and 10s tick), so they
 	// stay race-free even though sampling happens outside s.mu.

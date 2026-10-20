@@ -873,3 +873,36 @@ func TestDefaultWeatherLocationStaysInLegacyTimezone(t *testing.T) {
 		t.Fatalf("legacy timezone replaced the default: queries=%v location=%#v", queries, weather.Location)
 	}
 }
+
+func TestCachedLegacyWeatherResolvesOnFirstTick(t *testing.T) {
+	t.Setenv("TZ", "Europe/Stockholm")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "en_SE.UTF-8")
+	var queries, languages []string
+	synctest.Test(t, func(t *testing.T) {
+		directory := t.TempDir()
+		state := defaultWeatherState()
+		state.Status = weatherStatusReady
+		state.Current = &WeatherCurrent{Time: "cached", Temperature: 24}
+		state.NextRefreshAt = time.Now().Add(time.Hour).UnixMilli()
+		service := &Service{
+			state:           State{Weather: state},
+			statePath:       filepath.Join(directory, "state.json"),
+			snapshotPath:    filepath.Join(directory, "snapshot.json"),
+			weatherProvider: systemLocationWeatherProvider{&queries, &languages},
+			last:            time.Now(),
+		}
+
+		if !service.startWeatherRefresh(false) {
+			t.Fatal("cached legacy default did not refresh on the first tick")
+		}
+		synctest.Wait()
+		if service.state.Weather.Location.ID != "open-meteo:2673730" {
+			t.Fatalf("location = %#v", service.state.Weather.Location)
+		}
+		if service.startWeatherRefresh(false) {
+			t.Fatal("refresh gate was bypassed after the location was resolved")
+		}
+	})
+}
