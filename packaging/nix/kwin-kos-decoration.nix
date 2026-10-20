@@ -9,7 +9,11 @@
 stdenv.mkDerivation {
   pname = "kwin-kos-decoration";
   version = lib.removeSuffix "\n" (builtins.readFile "${src}/VERSION");
-  src = "${src}/kwin/kos-decoration";
+  # Unpack the whole tree: the sources include ../kos-bridge/windowappearance.
+  inherit src;
+  postUnpack = ''
+    sourceRoot="$sourceRoot/kwin/kos-decoration"
+  '';
 
   nativeBuildInputs = [
     cmake

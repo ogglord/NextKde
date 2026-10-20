@@ -9,7 +9,11 @@
 stdenv.mkDerivation {
   pname = "kwin-dock-window-animation";
   version = lib.removeSuffix "\n" (builtins.readFile "${src}/VERSION");
-  src = "${src}/kwin/dock-window-animation";
+  # Unpack the whole tree: the sources include ../kos-bridge/windowappearance.
+  inherit src;
+  postUnpack = ''
+    sourceRoot="$sourceRoot/kwin/dock-window-animation"
+  '';
 
   nativeBuildInputs = [
     cmake
