@@ -163,6 +163,12 @@
               after = [ "graphical-session.target" "plasma-kwin_wayland.service" "plasma-plasmashell.service"
                 "kos-platform.service" "kos-data.service" "kos-shell-init.service" ];
               partOf = [ "plasma-workspace-wayland.target" ];
+              # switch-to-configuration stops and starts changed user units.
+              # Stopping kos-platform also stops this unit (requires), but
+              # the switch starts it again only if this unit changed too. So
+              # restart with kos-platform, and with any new shell QML (the
+              # restart runs kos-shell-init, which copies it).
+              restartTriggers = [ kos config.systemd.user.units."kos-platform.service".unit ];
               # Session PATH, as for kos-platform: the shell also launches
               # apps directly when the daemon is unavailable.
               environment.PATH = lib.mkForce null;
