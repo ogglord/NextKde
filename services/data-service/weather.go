@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -34,6 +35,9 @@ const (
 	weatherBackoffMax  = 30 * time.Minute
 	// maxCachedWeather bounds the per-location snapshot cache held in memory.
 	maxCachedWeather = 20
+	// The first-run default. Its ID marks a location the user never chose,
+	// so a refresh may replace it with the system timezone's city.
+	legacyWeatherLocationID = "legacy:changsha"
 )
 
 type WeatherLocation struct {
@@ -177,7 +181,7 @@ type OpenMeteoProvider struct {
 
 func defaultWeatherState() WeatherState {
 	location := WeatherLocation{
-		ID:          "legacy:changsha",
+		ID:          legacyWeatherLocationID,
 		Name:        "长沙",
 		Admin1:      "湖南",
 		Country:     "中国",
@@ -890,6 +894,14 @@ func (s *Service) weatherLocationsSnapshot() []WeatherLocation {
 func (s *Service) fetchWeather(serial uint64, provider WeatherProvider, location WeatherLocation, units string) {
 	ctx, cancel := context.WithTimeout(context.Background(), weatherRequestTimeout)
 	defer cancel()
+	if location.ID == legacyWeatherLocationID {
+		if resolved, ok := systemWeatherLocation(ctx, provider, location); ok {
+			if !s.adoptSystemWeatherLocation(serial, resolved) {
+				return
+			}
+			location = resolved
+		}
+	}
 	forecast, err := provider.Forecast(ctx, location, units)
 	now := time.Now()
 
@@ -969,6 +981,83 @@ func (s *Service) fetchWeather(serial uint64, provider WeatherProvider, location
 	if !unchanged {
 		s.publishWeather()
 	}
+}
+
+// systemWeatherLocation resolves the city named by the system timezone, in
+// the session language. It declines when the timezone is the legacy
+// default's own, so those machines keep the original default.
+func systemWeatherLocation(ctx context.Context, provider WeatherProvider, legacy WeatherLocation) (WeatherLocation, bool) {
+	zone := systemTimezone()
+	slash := strings.LastIndex(zone, "/")
+	if slash < 0 || zone == legacy.Timezone {
+		return WeatherLocation{}, false
+	}
+	city := strings.ReplaceAll(zone[slash+1:], "_", " ")
+	results, err := provider.Search(ctx, city, systemLanguage(), 10)
+	if err != nil {
+		return WeatherLocation{}, false
+	}
+	// A city name alone is ambiguous; the matching timezone picks the city
+	// the zone is named after rather than a namesake elsewhere.
+	for _, result := range results {
+		if result.Timezone == zone {
+			return result, true
+		}
+	}
+	return WeatherLocation{}, false
+}
+
+// systemTimezone returns the IANA zone from TZ or the /etc/localtime link.
+func systemTimezone() string {
+	zone := strings.TrimPrefix(os.Getenv("TZ"), ":")
+	if zone == "" {
+		zone, _ = os.Readlink("/etc/localtime")
+	}
+	if index := strings.LastIndex(zone, "zoneinfo/"); index >= 0 {
+		zone = zone[index+len("zoneinfo/"):]
+	}
+	return zone
+}
+
+// systemLanguage returns the locale's language code, such as "sv" for
+// sv_SE.UTF-8, so geocoded names match the session language.
+func systemLanguage() string {
+	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+		fields := strings.FieldsFunc(os.Getenv(name), func(r rune) bool {
+			return r == '_' || r == '.' || r == '@' || r == '-'
+		})
+		if len(fields) == 0 {
+			continue
+		}
+		if language := strings.ToLower(fields[0]); language != "c" && language != "posix" {
+			return language
+		}
+		break
+	}
+	return "en"
+}
+
+// adoptSystemWeatherLocation replaces the legacy default with the resolved
+// system location unless a newer request superseded this one.
+func (s *Service) adoptSystemWeatherLocation(serial uint64, location WeatherLocation) bool {
+	s.mu.Lock()
+	if serial != s.weatherRequestSerial {
+		s.mu.Unlock()
+		return false
+	}
+	weather := &s.state.Weather
+	weather.Location = location
+	locations := []WeatherLocation{location}
+	for _, saved := range weather.Locations {
+		if saved.ID != legacyWeatherLocationID && saved.ID != location.ID {
+			locations = append(locations, saved)
+		}
+	}
+	weather.Locations = locations
+	s.mu.Unlock()
+	s.persist()
+	s.publishWeather()
+	return true
 }
 
 func (s *Service) searchWeather(query, language string, count int) ([]WeatherLocation, error) {
