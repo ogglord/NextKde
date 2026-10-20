@@ -61,5 +61,8 @@ hour and become stale after two hours. At most 48 hourly points, seven daily
 points, and twenty saved locations are persisted.
 
 The previous hard-coded Changsha location is the version-1 migration default.
+While the user has not chosen a location, a refresh replaces that default with
+the city named by the system timezone, geocoded in the session language.
+Machines in the default's own timezone keep Changsha.
 After the first user selection, both the app and Shell consume that selection.
 Failed refreshes preserve the previous complete forecast and surface the error.
