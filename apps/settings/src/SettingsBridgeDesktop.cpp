@@ -441,25 +441,26 @@ void SettingsBridge::startIntegrationProbe(const QVariantMap& replyMap)
             QStringList loadedEffects;
             bool kwinAvailable = false;
             if (!interrupted) {
+                // org.kde.kwin.Effects lives on /Effects, not /org/kde/KWin.
                 QDBusInterface effectsService(QStringLiteral("org.kde.KWin"),
-                    QStringLiteral("/org/kde/KWin"),
+                    QStringLiteral("/Effects"),
                     QStringLiteral("org.freedesktop.DBus.Properties"), sessionBus);
                 effectsService.setTimeout(kDbusProbeTimeoutMs);
                 const QDBusMessage propertyReply = effectsService.call(QStringLiteral("Get"),
                     QStringLiteral("org.kde.kwin.Effects"), QStringLiteral("loadedEffects"));
                 kwinAvailable = propertyReply.type() == QDBusMessage::ReplyMessage;
                 if (kwinAvailable && !propertyReply.arguments().isEmpty()) {
-                    const QDBusArgument argument
-                        = qvariant_cast<QDBusArgument>(propertyReply.arguments().constFirst());
-                    argument.beginArray();
-                    while (!argument.atEnd()) {
-                        QDBusVariant element;
-                        argument >> element;
-                        loadedEffects.append(element.variant().toString());
-                    }
-                    argument.endArray();
+                    // Get returns a variant wrapping `as`; QtDBus may hand the
+                    // inner value over as a QStringList or a raw QDBusArgument.
+                    const QVariant value = qvariant_cast<QDBusVariant>(
+                        propertyReply.arguments().constFirst()).variant();
+                    if (value.metaType() == QMetaType::fromType<QDBusArgument>())
+                        qvariant_cast<QDBusArgument>(value) >> loadedEffects;
+                    else
+                        loadedEffects = value.toStringList();
                 }
             }
+            result.insert(QStringLiteral("kwinAvailable"), kwinAvailable);
             result.insert(
                 QStringLiteral("glassLoaded"), loadedEffects.contains(QStringLiteral("glass")));
             result.insert(QStringLiteral("dockAnimationLoaded"),
