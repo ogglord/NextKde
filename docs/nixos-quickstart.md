@@ -27,6 +27,7 @@ Pass `specialArgs = { inherit inputs; };` to `nixpkgs.lib.nixosSystem`, then in 
   imports = [ inputs.nextkde.nixosModules.kos ];
   services.kos.enable = true;
   services.kos.weather.enable = true; # optional standalone Weather app
+  services.kos.cli.enable = true; # optional kosctl and kos-ctl helpers
 }
 ```
 
@@ -40,7 +41,8 @@ systemctl --user status kos-shell-init kos-platform kos-data kos-shell
 ```
 
 Packages read root VERSION and record the available source revision in the installed core record
-`/run/current-system/sw/share/kos/release.json`. The module does not install `kosctl` or `kos-ctl`.
+`/run/current-system/sw/share/kos/release.json`. `kosctl` and `kos-ctl` are installed only with
+`services.kos.cli.enable`; `kos-ctl sync` restarts `kos-shell-init` instead of searching the store.
 Development inputs may explicitly use `ref=main`; they are not stable releases.
 
 ## Runtime ownership and troubleshooting

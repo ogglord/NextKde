@@ -1,13 +1,10 @@
 {
-  lib,
   writeShellScriptBin,
-  jq,
-  coreutils,
-  systemd,
-  gnugrep,
   ...
 }:
 
+# Installed by services.kos.cli.enable. The NixOS module owns the units and
+# the shell config copy; this helper only drives them.
 writeShellScriptBin "kos-ctl" ''
   # KOS NixOS Control Interface
   # Unified interface for managing KOS Desktop Shell on NixOS
@@ -20,8 +17,8 @@ writeShellScriptBin "kos-ctl" ''
   CYAN='\033[0;36m'
   NC='\033[0m'
 
-  UNIT_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
   SHELL_CONFIG="''${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/kos"
+  UNITS="kos-platform.service kos-data.service kos-shell.service"
 
   print_ok()   { printf "$GREEN✓$NC %s\n" "$1"; }
   print_warn() { printf "$YELLOW⚠$NC %s\n" "$1"; }
@@ -40,10 +37,10 @@ Commands:
   restart     Restart all KOS services
   status      Show service status
   logs        Follow KOS logs
-  sync        Sync shell config from Nix store
+  sync        Sync shell config from the current system generation
   doctor      Check KOS installation health
-  enable      Enable KOS services for autostart
-  disable     Disable KOS autostart
+
+Autostart follows services.kos.enable in the NixOS configuration.
 
 Examples:
   kos-ctl start      # Start KOS
@@ -60,62 +57,22 @@ EOF
     fi
   }
 
-  find_kos_store() {
-    for dir in /nix/store/*-kos-desktop-unstable; do
-      if [[ -d "$dir/share/kos-desktop/shell" ]]; then
-        echo "$dir"
-        return
-      fi
-    done
-  }
-
+  # kos-shell-init copies the shell from the package the module installed,
+  # so sync never has to guess a store path.
   sync_shell_config() {
-    local kos_store
-    kos_store=$(find_kos_store)
-
-    if [[ -z "$kos_store" ]]; then
-      print_err "kos-desktop package not found in Nix store"
-      print_info "Run: sudo nixos-rebuild switch"
+    print_info "Syncing shell config from the system generation..."
+    if ! systemctl --user restart kos-shell-init.service; then
+      print_err "kos-shell-init.service failed"
+      print_info "Check: journalctl --user -u kos-shell-init"
       return 1
     fi
-
-    print_info "Syncing shell config from Nix store..."
-
-    # Remove old config (fix permissions first)
-    if [[ -d "$SHELL_CONFIG" ]]; then
-      find "$SHELL_CONFIG" -type d -exec chmod u+w {} + 2>/dev/null || true
-      find "$SHELL_CONFIG" -type f -exec chmod u+w {} + 2>/dev/null || true
-      rm -rf "$SHELL_CONFIG"
-    fi
-
-    # Create fresh directories
-    mkdir -p "$SHELL_CONFIG/shared/qml"
-
-    # Copy shell QML (follow symlinks, ignore source permissions)
-    cp -rL --no-preserve=mode "$kos_store/share/kos-desktop/shell/." "$SHELL_CONFIG/"
-
-    # Copy shared controls
-    local controls_src=""
-    if [[ -d "$kos_store/share/shared/qml/controls" ]]; then
-      controls_src="$kos_store/share/shared/qml/controls"
-    elif [[ -d "$kos_store/share/kos-desktop/shared/qml/controls" ]]; then
-      controls_src="$kos_store/share/kos-desktop/shared/qml/controls"
-    fi
-    if [[ -n "$controls_src" ]]; then
-      cp -rL --no-preserve=mode "$controls_src" "$SHELL_CONFIG/shared/qml/"
-    fi
-
     print_ok "Shell config synced"
   }
 
   start_services() {
-    systemctl --user daemon-reload
-
-    # Sync shell config first
     sync_shell_config
 
-    # Start all services
-    for unit in kos-platform.service kos-data.service kos-shell.service; do
+    for unit in $UNITS; do
       if systemctl --user is-active "$unit" >/dev/null 2>&1; then
         systemctl --user restart "$unit"
       else
@@ -137,7 +94,7 @@ EOF
 
   show_status() {
     printf "\n$GREEN=== KOS Service Status ===$NC\n"
-    for unit in kos-platform.service kos-data.service kos-shell.service; do
+    for unit in $UNITS; do
       if systemctl --user is-active "$unit" >/dev/null 2>&1; then
         printf "  $GREEN●$NC %s: running\n" "$unit"
       else
@@ -147,66 +104,28 @@ EOF
     printf "\n"
   }
 
-  enable_autostart() {
-    for unit in kos-platform.service kos-data.service kos-shell.service; do
-      systemctl --user enable "$unit"
-      print_ok "$unit enabled"
-    done
-  }
-
-  disable_autostart() {
-    for unit in kos-shell.service kos-platform.service kos-data.service; do
-      systemctl --user disable "$unit" 2>/dev/null || true
-      print_ok "$unit disabled"
-    done
-  }
-
   doctor() {
     print_info "Checking KOS installation..."
 
-    # Check binaries
-    for bin in kos-platform kos-data-service; do
-      if command -v "$bin" >/dev/null 2>&1 || [[ -f "/run/current-system/sw/libexec/$bin" ]]; then
-        print_ok "$bin found"
-      else
-        print_err "$bin not found"
-      fi
-    done
-
-    # Check quickshell
     if command -v quickshell >/dev/null 2>&1; then
       print_ok "quickshell: $(command -v quickshell)"
     else
       print_err "quickshell not found"
     fi
 
-    # Check shell config
-    if [[ -d "$SHELL_CONFIG/shell" ]]; then
+    if [[ -f "$SHELL_CONFIG/shell.qml" ]]; then
       print_ok "Shell config exists"
     else
       print_warn "Shell config missing (run: kos-ctl sync)"
     fi
 
-    # Check systemd services
-    for unit in kos-platform.service kos-data.service kos-shell.service; do
-      if [[ -f "$UNIT_DIR/$unit" ]]; then
+    for unit in kos-shell-init.service $UNITS; do
+      if systemctl --user cat "$unit" >/dev/null 2>&1; then
         print_ok "$unit: installed"
       else
-        print_warn "$unit: not installed"
+        print_err "$unit: not installed (is services.kos.enable set?)"
       fi
     done
-
-    # Check for broken symlinks
-    local broken=0
-    for unit in kos-platform.service kos-data.service kos-shell.service; do
-      if [[ -L "$UNIT_DIR/$unit" ]] && [[ ! -e "$UNIT_DIR/$unit" ]]; then
-        print_err "$unit: broken symlink"
-        broken=1
-      fi
-    done
-    if (( broken )); then
-      print_warn "Run: kos-ctl start (will auto-fix broken links)"
-    fi
 
     printf "\n"
   }
@@ -222,8 +141,6 @@ EOF
     logs)     journalctl --user -u kos-platform.service -u kos-data.service -u kos-shell.service -f ;;
     sync)     sync_shell_config ;;
     doctor)   doctor ;;
-    enable)   enable_autostart ;;
-    disable)  disable_autostart ;;
     help|-h|--help) usage ;;
     *)
       print_err "Unknown command: ''${1:-}"
