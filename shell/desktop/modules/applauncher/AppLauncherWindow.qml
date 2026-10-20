@@ -136,6 +136,8 @@ PanelWindow {
             } else if (applicationsDirty) {
                 applicationCatalogRefresh.restart();
             }
+            // Every invocation starts from an empty query, not the last search.
+            root.clearSearch();
             root.cancelFullscreenPageTransition();
             root.syncPagerSlots();
             // Let model/delegate creation settle before starting a cold-open
