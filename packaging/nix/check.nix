@@ -10,6 +10,7 @@ let
         services.kos = {
           enable = true;
           weather.enable = buildWeather;
+          cli.enable = true;
         };
         # A passthru marker does not rebuild KWin, but reveals whether the
         # module actually uses the host's package set rather than self.packages.

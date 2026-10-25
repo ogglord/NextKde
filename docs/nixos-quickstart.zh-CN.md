@@ -25,6 +25,7 @@ nextkde = {
   imports = [ inputs.nextkde.nixosModules.kos ];
   services.kos.enable = true;
   services.kos.weather.enable = true; # 可选独立天气应用
+  services.kos.cli.enable = true; # 可选 kosctl 与 kos-ctl 辅助工具
 }
 ```
 
@@ -40,6 +41,7 @@ systemctl --user status kos-shell-init kos-platform kos-data kos-shell
 包读取根 VERSION 并记录可得 revision；打包 `kosctl version` 查询
 `/run/current-system/sw/share/kos/release.json` 的实际核心部署记录，`KOS_RELEASE_RECORD` 可另选真实部署。
 不在只读 store 运行源码 `update`；开发输入可显式 `ref=main`，但不是稳定版。
+仅在 `services.kos.cli.enable` 时安装 `kosctl` 与 `kos-ctl`。
 
 ## 所有权与排查
 

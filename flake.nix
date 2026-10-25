@@ -47,10 +47,14 @@
           weather = {
             enable = lib.mkEnableOption "KOS Weather standalone application";
           };
+          cli = {
+            enable = lib.mkEnableOption "the kosctl and kos-ctl command-line helpers";
+          };
         };
 
         config = lib.mkIf cfg.enable {
-          # System-wide packages: binaries + KWin plugins + kosctl + kos-ctl
+          # System-wide packages: binaries + KWin plugins. The kosctl/kos-ctl
+          # helpers are opt-in: the module owns install and units here.
           #
           # The window decoration is one of the plugins, not an option: the KOS
           # Bridge effect draws the window buttons only on windows wearing it,
@@ -71,6 +75,9 @@
             kos.passthru.kwin-kos-decoration
           ] ++ lib.optionals cfg.weather.enable [
             kos.passthru.weather
+          ] ++ lib.optionals cfg.cli.enable [
+            kos.passthru.kosctl
+            kos-ctl
           ];
 
           # KWin plugins live under lib/kwin/ in the Nix store
