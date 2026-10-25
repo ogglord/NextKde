@@ -3304,6 +3304,16 @@ PanelWindow {
             case "setIconSize": setIconSize(v); break
             case "setIconSpacing": setIconSpacing(v); break
             case "refresh": triggerContextAction("refresh"); break
+            case "lock":
+            case "suspend":
+            case "switch":
+            case "logout":
+            case "reboot":
+            case "poweroff":
+                // Let the menu finish its click dispatch before the control
+                // center opens its confirmation dialog, as SystemMenu does.
+                Qt.callLater(triggerContextAction, cmd)
+                break
             }
         }
 
