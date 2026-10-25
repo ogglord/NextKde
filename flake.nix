@@ -81,7 +81,7 @@
             # Oneshot: copy shell QML to ~/.config/quickshell/kos/
             kos-shell-init = {
               description = "KOS shell config initializer";
-              wantedBy = [ "graphical-session.target" ];
+              wantedBy = [ "plasma-workspace-wayland.target" ];
               serviceConfig = {
                 Type = "oneshot";
                 ExecStart = sync-shell;
@@ -91,9 +91,9 @@
             # Platform daemon
             kos-platform = {
               description = "KOS platform integration service";
-              wantedBy = [ "graphical-session.target" ];
+              wantedBy = [ "plasma-workspace-wayland.target" ];
               after = [ "graphical-session.target" "plasma-kwin_wayland.service" ];
-              partOf = [ "graphical-session.target" ];
+              partOf = [ "plasma-workspace-wayland.target" ];
               serviceConfig = {
                 Type = "simple";
                 ExecStart = "${kos}/libexec/kos-platform daemon";
@@ -109,9 +109,9 @@
             # Data service
             kos-data = {
               description = "KOS persistent data service";
-              wantedBy = [ "graphical-session.target" ];
+              wantedBy = [ "plasma-workspace-wayland.target" ];
               after = [ "graphical-session.target" "plasma-kwin_wayland.service" ];
-              partOf = [ "graphical-session.target" ];
+              partOf = [ "plasma-workspace-wayland.target" ];
               serviceConfig = {
                 Type = "simple";
                 ExecStart = "${kos}/libexec/kos-data-service";
@@ -123,12 +123,12 @@
             # Quickshell desktop shell
             kos-shell = {
               description = "KOS Quickshell desktop shell";
-              wantedBy = [ "graphical-session.target" ];
+              wantedBy = [ "plasma-workspace-wayland.target" ];
               requires = [ "kos-platform.service" "kos-shell-init.service" ];
               wants = [ "kos-data.service" ];
               after = [ "graphical-session.target" "plasma-kwin_wayland.service" "plasma-plasmashell.service"
                 "kos-platform.service" "kos-data.service" "kos-shell-init.service" ];
-              partOf = [ "graphical-session.target" ];
+              partOf = [ "plasma-workspace-wayland.target" ];
               serviceConfig = {
                 Type = "simple";
                 KillMode = "process";
